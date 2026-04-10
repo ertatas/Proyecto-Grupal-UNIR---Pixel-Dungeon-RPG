@@ -1,0 +1,20 @@
+# Visual Studio
+.vs/
+*.user
+*.VC.db
+
+# Build
+x64/
+Debug/
+Release/
+*.obj
+*.exe
+*.pdb
+*.ilk
+
+# Logs
+*.log
+*.tlog
+
+# Opcional (recomendado)
+SFML-2.5.1/bin/

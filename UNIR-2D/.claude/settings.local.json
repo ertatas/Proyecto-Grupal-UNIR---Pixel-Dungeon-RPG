@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(grep -E \"^d|\\\\.h$|\\\\.cpp$\")",
+      "Bash(grep -r \"HUD\\\\|UI\\\\|interfaz\" /c/Proyecto-Grupal-UNIR---Pixel-Dungeon-RPG/UNIR-2D/*.h --include=\"*.h\")"
+    ]
+  }
+}
