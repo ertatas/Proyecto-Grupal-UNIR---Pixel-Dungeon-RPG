@@ -154,6 +154,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="DungeonJuego.cpp" />
+    <ClCompile Include="Hud.cpp" />
     <ClCompile Include="JuegoDungeon.cpp" />
     <ClCompile Include="Jugador.cpp" />
   </ItemGroup>
@@ -165,6 +166,7 @@
   <ItemGroup>
     <ClInclude Include="..\UNIR-2D\EditorMapa.h" />
     <ClInclude Include="..\UNIR-2D\Mapa.h" />
+    <ClInclude Include="Hud.h" />
     <ClInclude Include="JuegoDungeon.h" />
     <ClInclude Include="Jugador.h" />
   </ItemGroup>

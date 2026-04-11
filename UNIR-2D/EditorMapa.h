@@ -10,11 +10,20 @@
 // El jugador queda congelado mientras el editor está activo.
 //
 // CAPAS (ciclar con A / D):
-//   0 BASE     — estructura del nivel (azul)
-//   1 PROPS    — decoración visual    (morado)
-//   2 TRAMPAS  — trampas ocultas      (rojo)
-//   3 ENEMIGOS — spawn de enemigos    (verde)
-//   4 LLAVES   — llaves               (dorado)
+//   0 BASE      — estructura del nivel (azul)
+//   1 PROPS     — decoración visual    (morado) — pared 1-9, suelo 10-19
+//   2 TRAMPAS   — trampas ocultas      (rojo)
+//   3 ENEMIGOS  — spawn de enemigos    (verde)
+//   4 LLAVES    — llaves               (dorado)
+//   5 VARIANTES — variante visual de pared/puerta (gris plateado)
+//
+// PARA AÑADIR UN NUEVO PROP EN EL FUTURO:
+//   - Rango 1-9  → prop de pared (añadir en Mapa.h: PROP_NUEVO <= 9)
+//   - Rango 10-19→ prop de suelo (añadir en Mapa.h: PROP_NUEVO >= 10 y <= 19)
+//   El editor detecta el rango automáticamente. Solo hay que:
+//   1. Añadir constante en Mapa.h (TipoProp)
+//   2. Añadir color en Mapa.cpp → colorPropPared() o colorPropSuelo()
+//   3. NO tocar EditorMapa — el rango lo gestiona todo.
 //
 // CONTROLES:
 //   F1         → activar / desactivar editor (auto-guarda al salir)
@@ -49,12 +58,12 @@ private:
     int filaActual = 1;
     int colActual  = 1;
 
-    // 0=BASE  1=PROPS  2=TRAMPAS  3=ENEMIGOS  4=LLAVES
+    // 0=BASE  1=PROPS  2=TRAMPAS  3=ENEMIGOS  4=LLAVES  5=VARIANTES
     int capaActual = 0;
     int tipoActual = 1;
 
-    static const int NUM_CAPAS = 5;
-    static const int MAX_TIPOS = 8;   // máximo de tipos en cualquier capa
+    static const int NUM_CAPAS = 6;
+    static const int MAX_TIPOS = 8;   // máximo de tipos en cualquier capa (7 variantes + 1 margen)
 
     // Edge-detection
     bool f1Prev    = false;

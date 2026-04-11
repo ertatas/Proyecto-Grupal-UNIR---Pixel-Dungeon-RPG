@@ -1,5 +1,6 @@
 #include "UNIR-2D.h"
 #include "EditorMapa.h"
+#include <iostream>
 
 using namespace unir2d;
 
@@ -256,18 +257,77 @@ void EditorMapa::pintarEnCursor() {
 }
 
 void EditorMapa::pintarTile(int fila, int col, int tipo) {
+    // Tabla de traducción: índice de paleta → valor de enum TipoProp
+    // (solo para capa 1, el resto usa el valor directamente)
+    static const int propValues[] = { 0, 1, 2, 10, 11, 12 };   // nada,lampara,antorcha,charco,mancha,huesos
+
     switch (capaActual) {
-        case 0: mapa->setBase   (fila, col, tipo); break;
-        case 1: mapa->setProp   (fila, col, tipo); break;
+        case 0:
+            mapa->setBase(fila, col, tipo);
+            // Autodetección de variante al pintar pared o puerta.
+            if (tipo == Mapa::BASE_PARED ||
+                tipo == Mapa::BASE_PUERTA_CERRADA ||
+                tipo == Mapa::BASE_PUERTA_ABIERTA)
+            {
+                mapa->setVariante(fila, col, (int)mapa->detectarVariante(fila, col));
+                // Recalcular los 4 vecinos, cuya variante puede haber cambiado.
+                const int dff[] = {-1, 1, 0, 0};
+                const int dcc[] = { 0, 0,-1, 1};
+                for (int d = 0; d < 4; d++)
+                    mapa->setVariante(fila + dff[d], col + dcc[d],
+                                      (int)mapa->detectarVariante(fila + dff[d], col + dcc[d]));
+            }
+            break;
+
+        case 1: {
+            // Traducir índice de paleta → valor de enum
+            if (tipo < 0 || tipo > 5) break;
+            int val = propValues[tipo];
+            // Validación: prop de pared solo sobre BASE_PARED
+            if (Mapa::esPropDePared(val) && mapa->getBase(fila, col) != Mapa::BASE_PARED) {
+                std::cout << "EDITOR: prop de pared requiere BASE_PARED\n";
+                break;
+            }
+            // Validación: prop de suelo no se coloca sobre BASE_PARED
+            if (Mapa::esPropDeSuelo(val) && mapa->getBase(fila, col) == Mapa::BASE_PARED) {
+                std::cout << "EDITOR: prop de suelo requiere BASE_SUELO\n";
+                break;
+            }
+            mapa->setProp(fila, col, val);
+            break;
+        }
+
         case 2: mapa->setTrampa (fila, col, tipo); break;
         case 3: mapa->setEnemigo(fila, col, tipo); break;
         case 4: mapa->setLlave  (fila, col, tipo); break;
+
+        case 5: {
+            // Capa VARIANTES: solo aplicable a paredes y puertas
+            int base = mapa->getBase(fila, col);
+            if (base != Mapa::BASE_PARED &&
+                base != Mapa::BASE_PUERTA_CERRADA &&
+                base != Mapa::BASE_PUERTA_ABIERTA)
+            {
+                std::cout << "EDITOR: variante solo aplicable a paredes y puertas\n";
+                break;
+            }
+            mapa->setVariante(fila, col, tipo);
+            break;
+        }
     }
 }
 
 void EditorMapa::borrarTile(int fila, int col) {
-    // Tipo 0 es siempre "nada" en todas las capas
-    pintarTile(fila, col, 0);
+    if (capaActual == 5) {
+        // Capa VARIANTES: resetear a VAR_DEFAULT silenciosamente (sin validación de tipo de tile)
+        mapa->setVariante(fila, col, Mapa::VAR_DEFAULT);
+    } else if (capaActual == 1) {
+        // Capa PROPS: borrar (tipo 0 = PROP_NADA) sin validación
+        mapa->setProp(fila, col, 0);
+    } else {
+        // Resto de capas: tipo 0 es siempre "nada"
+        pintarTile(fila, col, 0);
+    }
 }
 
 void EditorMapa::mostrarUI(bool valor) {
@@ -300,21 +360,23 @@ bool EditorMapa::screenToTile(Vector screenPos, int& fila, int& col) const {
 int EditorMapa::maxTipos() const {
     switch (capaActual) {
         case 0: return 4;   // suelo, pared, puerta cerrada, puerta abierta
-        case 1: return 3;   // nada, lámpara, antorcha
+        case 1: return 6;   // nada, lámpara, antorcha, charco, mancha, huesos
         case 2: return 2;   // nada, trampa fija
         case 3: return 2;   // nada, spawn enemigo
         case 4: return 2;   // nada, llave
+        case 5: return 7;   // VAR_DEFAULT..VAR_PUERTA_V
     }
     return 1;
 }
 
 Color EditorMapa::colorBanner(int capa) const {
     switch (capa) {
-        case 0: return Color( 50,  90, 210);   // azul     — BASE
-        case 1: return Color(110,  40, 170);   // morado   — PROPS
-        case 2: return Color(180,  30,  30);   // rojo     — TRAMPAS
-        case 3: return Color( 30, 155,  60);   // verde    — ENEMIGOS
-        case 4: return Color(170, 130,   0);   // dorado   — LLAVES
+        case 0: return Color( 50,  90, 210);   // azul       — BASE
+        case 1: return Color(110,  40, 170);   // morado     — PROPS
+        case 2: return Color(180,  30,  30);   // rojo       — TRAMPAS
+        case 3: return Color( 30, 155,  60);   // verde      — ENEMIGOS
+        case 4: return Color(170, 130,   0);   // dorado     — LLAVES
+        case 5: return Color(130, 130, 140);   // gris plata — VARIANTES
     }
     return Color(80, 80, 80);
 }
@@ -326,6 +388,7 @@ Color EditorMapa::colorCursor(int capa) const {
         case 2: return Color(255,  60,  60, 130);   // rojo
         case 3: return Color( 60, 230,  80, 130);   // verde
         case 4: return Color(255, 220,   0, 130);   // amarillo
+        case 5: return Color(200, 200, 210, 130);   // gris claro
     }
     return Color(255, 255, 255, 100);
 }
@@ -349,11 +412,14 @@ Color EditorMapa::colorTipoPaleta(int capa, int tipo) const {
                 case 3: return Color(200, 150,  70);   // puerta abierta
             }
             break;
-        case 1:  // PROPS
+        case 1:  // PROPS — índices 0..5 del editor, mapeados a valores 0,1,2,10,11,12
             switch (tipo) {
                 case 0: return Color( 25,  25,  25);   // nada
-                case 1: return Color(  0, 210, 210);   // lámpara  (cian)
-                case 2: return Color(255, 110,   0);   // antorcha (naranja)
+                case 1: return Color(  0, 210, 210);   // lámpara  (pared) — cian
+                case 2: return Color(255, 110,   0);   // antorcha (pared) — naranja
+                case 3: return Color( 20,  40, 100);   // charco   (suelo) — azul oscuro
+                case 4: return Color( 60,  30,  10);   // mancha   (suelo) — marrón oscuro
+                case 5: return Color(220, 210, 180);   // huesos   (suelo) — blanco hueso
             }
             break;
         case 2:  // TRAMPAS
@@ -372,6 +438,17 @@ Color EditorMapa::colorTipoPaleta(int capa, int tipo) const {
             switch (tipo) {
                 case 0: return Color( 25,  25,  25);   // nada
                 case 1: return Color(240, 210,   0);   // llave (amarillo dorado)
+            }
+            break;
+        case 5:  // VARIANTES — índice == valor VarianteVisual
+            switch (tipo) {
+                case 0: return Color( 80,  80,  80);   // VAR_DEFAULT  — gris medio
+                case 1: return Color( 80,  80, 120);   // VAR_NORTE    — gris azulado
+                case 2: return Color(120,  80,  80);   // VAR_SUR      — gris rojizo
+                case 3: return Color( 80, 120,  80);   // VAR_ESTE     — gris verdoso
+                case 4: return Color(120, 120,  80);   // VAR_OESTE    — gris amarillento
+                case 5: return Color(139,  90,  43);   // VAR_PUERTA_H — marrón claro
+                case 6: return Color(100,  60,  20);   // VAR_PUERTA_V — marrón oscuro
             }
             break;
     }

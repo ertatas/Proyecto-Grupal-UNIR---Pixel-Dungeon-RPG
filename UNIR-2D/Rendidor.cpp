@@ -43,7 +43,7 @@ void Rendidor::cierra () {
 
 
 void Rendidor::limpia () {
-    window->clear(sf::Color(150, 150, 150, 255));
+    window->clear(sf::Color::Black);
 }
 
 

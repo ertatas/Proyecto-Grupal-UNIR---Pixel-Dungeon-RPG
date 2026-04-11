@@ -58,6 +58,59 @@ int Mapa::getProp(int fila, int col) const {
     return capaProps[fila][col];
 }
 
+int Mapa::getLlave(int fila, int col) const {
+    if (!dentroRango(fila, col)) return LLAVE_NADA;
+    return capaLlaves[fila][col];
+}
+
+int Mapa::getVariante(int fila, int col) const {
+    if (!dentroRango(fila, col)) return VAR_DEFAULT;
+    return capaVariantes[fila][col];
+}
+
+void Mapa::setVariante(int fila, int col, int variante) {
+    if (!dentroRango(fila, col)) return;
+    capaVariantes[fila][col] = variante;
+    // Actualizar solo el drawable base de este tile (evita refrescar todo el mapa).
+    int i = fila * columnas + col;
+    if (!dibujosBase.empty()) {
+        dibujosBase[i]->ponColor(colorBase(fila, col));
+    }
+}
+
+Mapa::VarianteVisual Mapa::detectarVariante(int fila, int col) const {
+    if (!dentroRango(fila, col)) return VAR_DEFAULT;
+
+    int tipo = capaBase[fila][col];
+
+    if (tipo == BASE_PUERTA_CERRADA || tipo == BASE_PUERTA_ABIERTA) {
+        // Puerta horizontal: tiene suelo/paso al este u oeste
+        bool pasoE = dentroRango(fila, col+1) && capaBase[fila][col+1] != BASE_PARED;
+        bool pasoO = dentroRango(fila, col-1) && capaBase[fila][col-1] != BASE_PARED;
+        bool pasoN = dentroRango(fila-1, col) && capaBase[fila-1][col] != BASE_PARED;
+        bool pasoS = dentroRango(fila+1, col) && capaBase[fila+1][col] != BASE_PARED;
+        if (pasoE || pasoO) return VAR_PUERTA_H;
+        if (pasoN || pasoS) return VAR_PUERTA_V;
+        return VAR_DEFAULT;
+    }
+
+    if (tipo == BASE_PARED) {
+        // La cara visible de la pared es opuesta al lado donde hay suelo.
+        // Prioridad N/S sobre E/O en caso de ambigüedad (esquina).
+        bool sueloN = dentroRango(fila-1, col) && capaBase[fila-1][col] == BASE_SUELO;
+        bool sueloS = dentroRango(fila+1, col) && capaBase[fila+1][col] == BASE_SUELO;
+        bool sueloE = dentroRango(fila, col+1) && capaBase[fila][col+1] == BASE_SUELO;
+        bool sueloO = dentroRango(fila, col-1) && capaBase[fila][col-1] == BASE_SUELO;
+        if (sueloN) return VAR_SUR;    // suelo al norte → cara de la pared mira al sur
+        if (sueloS) return VAR_NORTE;  // suelo al sur   → cara mira al norte
+        if (sueloE) return VAR_OESTE;
+        if (sueloO) return VAR_ESTE;
+        return VAR_DEFAULT;
+    }
+
+    return VAR_DEFAULT;
+}
+
 bool Mapa::esTransitable(int fila, int col) const {
     if (!dentroRango(fila, col))                        return false;
     if (capaBase[fila][col] == BASE_PARED)              return false;
@@ -86,7 +139,18 @@ void Mapa::setProp(int fila, int col, int tipo) {
     if (!dentroRango(fila, col)) return;
     capaProps[fila][col] = tipo;
     int i = fila * columnas + col;
-    dibujosProps[i]->ponColor(colorProp(fila, col));
+    static const Color transparente(0, 0, 0, 0);
+    if (esPropDePared(tipo)) {
+        dibujosProps [i]->ponColor(colorPropPared(fila, col));
+        dibujosPropsS[i]->ponColor(transparente);
+    } else if (esPropDeSuelo(tipo)) {
+        dibujosProps [i]->ponColor(transparente);
+        dibujosPropsS[i]->ponColor(colorPropSuelo(fila, col));
+    } else {
+        // PROP_NADA
+        dibujosProps [i]->ponColor(transparente);
+        dibujosPropsS[i]->ponColor(transparente);
+    }
 }
 
 void Mapa::setTrampa(int fila, int col, int tipo) {
@@ -125,7 +189,7 @@ void Mapa::guardarMapa(const std::string& /*ignorada*/) const {
     std::ofstream f(rutaMapa());
     if (!f.is_open()) return;
 
-    f << "DUNGEON_MAP 1\n";
+    f << "DUNGEON_MAP 2\n";
     f << filas << " " << columnas << "\n";
 
     auto escribeCapa = [&](const std::string& nombre,
@@ -140,11 +204,12 @@ void Mapa::guardarMapa(const std::string& /*ignorada*/) const {
         }
     };
 
-    escribeCapa("BASE",     capaBase);
-    escribeCapa("PROPS",    capaProps);
-    escribeCapa("TRAMPAS",  capaTrampas);
-    escribeCapa("ENEMIGOS", capaEnemigos);
-    escribeCapa("LLAVES",   capaLlaves);
+    escribeCapa("BASE",      capaBase);
+    escribeCapa("PROPS",     capaProps);
+    escribeCapa("TRAMPAS",   capaTrampas);
+    escribeCapa("ENEMIGOS",  capaEnemigos);
+    escribeCapa("LLAVES",    capaLlaves);
+    escribeCapa("VARIANTES", capaVariantes);
     f << "SPAWN\n" << spawnFila << " " << spawnCol << "\n";
     f << "END\n";
 }
@@ -155,8 +220,15 @@ void Mapa::cargarMapaDesdeArchivo(const std::string& ruta) {
 
     std::string linea;
 
-    // Cabecera
-    std::getline(f, linea); // DUNGEON_MAP 1
+    // Cabecera: "DUNGEON_MAP <version>"
+    std::getline(f, linea);
+    int version = 1;
+    {
+        std::istringstream ss(linea);
+        std::string magic;
+        ss >> magic >> version;  // magic = "DUNGEON_MAP"
+    }
+
     int nuevasFilas = 0, nuevasColumnas = 0;
     f >> nuevasFilas >> nuevasColumnas;
     std::getline(f, linea); // consume el salto de línea restante
@@ -179,6 +251,16 @@ void Mapa::cargarMapaDesdeArchivo(const std::string& ruta) {
     leeCapa(capaTrampas);
     leeCapa(capaEnemigos);
     leeCapa(capaLlaves);
+
+    if (version >= 2) {
+        // v2: cargar capaVariantes desde el fichero
+        leeCapa(capaVariantes);
+    } else {
+        // v1 → retrocompatibilidad: auto-detectar variantes a partir de la estructura del mapa
+        for (int fr = 0; fr < filas; fr++)
+            for (int fc = 0; fc < columnas; fc++)
+                capaVariantes[fr][fc] = static_cast<int>(detectarVariante(fr, fc));
+    }
 
     // SPAWN (opcional — compatibilidad con ficheros guardados sin esta sección)
     std::string token;
@@ -212,6 +294,7 @@ void Mapa::crearCapas(int nuevasFilas, int nuevasColumnas) {
     capaEnemigos    .assign(filas, std::vector<int>(columnas, ENEMIGO_NADA));
     capaLlaves      .assign(filas, std::vector<int>(columnas, LLAVE_NADA));
     capaVisibilidad .assign(filas, std::vector<int>(columnas, VIS_OCULTO));
+    capaVariantes   .assign(filas, std::vector<int>(columnas, VAR_DEFAULT));
     capaVisual      .assign(filas, std::vector<CoordenadasVisuales>(columnas));
 }
 
@@ -286,6 +369,15 @@ void Mapa::revelarTodo() {
     refrescarDibujos();
 }
 
+void Mapa::resetearFog() {
+    for (int f = 0; f < filas; f++) {
+        for (int c = 0; c < columnas; c++) {
+            capaVisibilidad[f][c] = VIS_OCULTO;
+        }
+    }
+    refrescarDibujos();
+}
+
 void Mapa::construirMapaInicial() {
     crearCapas(32, 32);
 
@@ -351,51 +443,70 @@ void Mapa::crearDibujos() {
     dibujosEnemigos.reserve(total);
     dibujosLlaves  .reserve(total);
     dibujosProps   .reserve(total);
+    dibujosPropsS  .reserve(total);
 
-    // Dimensiones del prop decorativo (lámpara/antorcha):
-    // centrado horizontalmente, pegado a la parte superior del tile.
-    const float pw = tamCasilla * 0.25f;
-    const float ph = tamCasilla * 0.38f;
+    // Prop de PARED (lámpara/antorcha): 16×24 px, centrado horizontalmente, pegado arriba.
+    const float ppW = tamCasilla * 0.25f;
+    const float ppH = tamCasilla * 0.38f;
+
+    // Prop de SUELO (charco/mancha/huesos): 48×48 px, centrado en el tile.
+    const float psW = tamCasilla * 0.75f;
+    const float psH = tamCasilla * 0.75f;
 
     for (int f = 0; f < filas; f++) {
         for (int c = 0; c < columnas; c++) {
             float tx = c * tamCasilla;
             float ty = f * tamCasilla;
 
-            // ---- BASE (tile completo) ----
+            // [0] BASE (tile completo, 64×64)
             Rectangulo* rBase = new Rectangulo(tamCasilla, tamCasilla);
             rBase->ponPosicion(Vector(tx, ty));
             rBase->ponIndiceZ(0);
             agregaDibujo(rBase);
             dibujosBase.push_back(rBase);
 
-            // ---- TRAMPA (pequeño, centrado) ----
+            // [1] TRAMPA (14×14, centrado)
             Rectangulo* rTrampa = new Rectangulo(tamCasilla * 0.22f, tamCasilla * 0.22f);
             rTrampa->ponPosicion(Vector(tx + tamCasilla * 0.39f, ty + tamCasilla * 0.39f));
             rTrampa->ponIndiceZ(1);
             agregaDibujo(rTrampa);
             dibujosTrampas.push_back(rTrampa);
 
-            // ---- ENEMIGO (grande) ----
+            // [2] ENEMIGO (33×33, centrado)
             Rectangulo* rEnemigo = new Rectangulo(tamCasilla * 0.52f, tamCasilla * 0.52f);
             rEnemigo->ponPosicion(Vector(tx + tamCasilla * 0.24f, ty + tamCasilla * 0.24f));
             rEnemigo->ponIndiceZ(1);
             agregaDibujo(rEnemigo);
             dibujosEnemigos.push_back(rEnemigo);
 
-            // ---- LLAVE (pequeña, arriba) ----
+            // [3] LLAVE (12×12, arriba-centro)
             Rectangulo* rLlave = new Rectangulo(tamCasilla * 0.18f, tamCasilla * 0.18f);
             rLlave->ponPosicion(Vector(tx + tamCasilla * 0.41f, ty + tamCasilla * 0.12f));
             rLlave->ponIndiceZ(1);
             agregaDibujo(rLlave);
             dibujosLlaves.push_back(rLlave);
 
-            // ---- PROP (decoración sobre pared/suelo) ----
-            Rectangulo* rProp = new Rectangulo(pw, ph);
-            rProp->ponPosicion(Vector(tx + (tamCasilla - pw) * 0.5f, ty + tamCasilla * 0.06f));
-            rProp->ponIndiceZ(2);   // encima de todo lo anterior
-            agregaDibujo(rProp);
-            dibujosProps.push_back(rProp);
+            // [4] PROP PARED (16×24, centrado horizontalmente, pegado arriba)
+            // TODO_ARTISTA: reemplazar ponColor(...) por textura PNG:
+            //   imagen.ponTextura(textura); imagen.ponPosicion(x, y);
+            //   Ruta: assets/textures/tiles/props/pared/lampara.png o antorcha.png
+            //   Ver GUIA_EDITOR_MAPA.md sección "Guía para artistas"
+            Rectangulo* rPropP = new Rectangulo(ppW, ppH);
+            rPropP->ponPosicion(Vector(tx + (tamCasilla - ppW) * 0.5f, ty + tamCasilla * 0.06f));
+            rPropP->ponIndiceZ(2);
+            agregaDibujo(rPropP);
+            dibujosProps.push_back(rPropP);
+
+            // [5] PROP SUELO (48×48, centrado en el tile)
+            // TODO_ARTISTA: reemplazar ponColor(...) por textura PNG:
+            //   imagen.ponTextura(textura); imagen.ponPosicion(x, y);
+            //   Ruta: assets/textures/tiles/props/suelo/charco.png, mancha.png, huesos.png
+            //   Ver GUIA_EDITOR_MAPA.md sección "Guía para artistas"
+            Rectangulo* rPropS = new Rectangulo(psW, psH);
+            rPropS->ponPosicion(Vector(tx + (tamCasilla - psW) * 0.5f, ty + (tamCasilla - psH) * 0.5f));
+            rPropS->ponIndiceZ(1);
+            agregaDibujo(rPropS);
+            dibujosPropsS.push_back(rPropS);
         }
     }
 }
@@ -416,19 +527,32 @@ void Mapa::refrescarDibujos() {
             dibujosBase[i]->ponPosicion(Vector(tx, ty));
 
             if (capaVisibilidad[f][c] == VIS_OCULTO) {
-                // Zona no explorada: negro absoluto, no se dibuja nada
+                // Zona no explorada: negro absoluto, el resto invisible.
                 dibujosBase[i]    ->ponColor(negroOpaco);
                 dibujosTrampas[i] ->ponColor(transparente);
                 dibujosEnemigos[i]->ponColor(transparente);
                 dibujosLlaves[i]  ->ponColor(transparente);
                 dibujosProps[i]   ->ponColor(transparente);
+                dibujosPropsS[i]  ->ponColor(transparente);
             } else {
-                // Zona visible: colores normales
+                // Zona visible: colores normales según tipo y variante.
                 dibujosBase[i]    ->ponColor(colorBase   (f, c));
                 dibujosTrampas[i] ->ponColor(colorTrampa (f, c));
                 dibujosEnemigos[i]->ponColor(colorEnemigo(f, c));
                 dibujosLlaves[i]  ->ponColor(colorLlave  (f, c));
-                dibujosProps[i]   ->ponColor(colorProp   (f, c));
+
+                // Props: solo se muestra el drawable que corresponde al tipo de prop.
+                int prop = capaProps[f][c];
+                if (esPropDePared(prop)) {
+                    dibujosProps [i]->ponColor(colorPropPared(f, c));
+                    dibujosPropsS[i]->ponColor(transparente);
+                } else if (esPropDeSuelo(prop)) {
+                    dibujosProps [i]->ponColor(transparente);
+                    dibujosPropsS[i]->ponColor(colorPropSuelo(f, c));
+                } else {
+                    dibujosProps [i]->ponColor(transparente);
+                    dibujosPropsS[i]->ponColor(transparente);
+                }
             }
         }
     }
@@ -436,10 +560,11 @@ void Mapa::refrescarDibujos() {
 
 void Mapa::limpiarListasDibujos() {
     dibujosBase    .clear();
-    dibujosProps   .clear();
     dibujosTrampas .clear();
     dibujosEnemigos.clear();
     dibujosLlaves  .clear();
+    dibujosProps   .clear();
+    dibujosPropsS  .clear();
 }
 
 // ============================================================
@@ -464,20 +589,55 @@ bool Mapa::esPared(int fila, int col) const {
 // ============================================================
 
 Color Mapa::colorBase(int fila, int col) const {
-    switch (capaBase[fila][col]) {
-        case BASE_SUELO:          return Color( 90,  90,  90);
-        case BASE_PARED:          return Color( 45,  45,  45);
-        case BASE_PUERTA_CERRADA: return Color(160, 100,  35);
-        case BASE_PUERTA_ABIERTA: return Color(210, 160,  90);
-        default:                  return Color(255,   0, 255);
+    // TODO_ARTISTA: reemplazar cada ponColor por textura PNG según tipo y variante.
+    //   Ruta base: assets/textures/tiles/base/
+    //   Archivos: suelo.png, pared_default.png, pared_norte.png, etc.
+    //   Ver GUIA_EDITOR_MAPA.md sección "Guía para artistas"
+    int base = capaBase[fila][col];
+    int var  = capaVariantes[fila][col];
+
+    switch (base) {
+        case BASE_SUELO:
+            return Color(90, 90, 90);
+        case BASE_PARED:
+            switch (var) {
+                case VAR_NORTE:   return Color( 80,  80, 120);   // gris azulado
+                case VAR_SUR:     return Color(120,  80,  80);   // gris rojizo
+                case VAR_ESTE:    return Color( 80, 120,  80);   // gris verdoso
+                case VAR_OESTE:   return Color(120, 120,  80);   // gris amarillento
+                default:          return Color( 80,  80,  80);   // VAR_DEFAULT gris medio
+            }
+        case BASE_PUERTA_CERRADA:
+            if (var == VAR_PUERTA_H) return Color(139,  90,  43);   // marrón claro
+            else                     return Color(100,  60,  20);   // marrón oscuro (V)
+        case BASE_PUERTA_ABIERTA:
+            if (var == VAR_PUERTA_H) return Color(210, 160,  90);
+            else                     return Color(180, 130,  65);
+        default:
+            return Color(255, 0, 255);
     }
 }
 
-Color Mapa::colorProp(int fila, int col) const {
+Color Mapa::colorPropPared(int fila, int col) const {
+    // TODO_ARTISTA: reemplazar por textura PNG.
+    //   Ruta: assets/textures/tiles/props/pared/
+    //   Archivos: lampara.png (16×24 px), antorcha.png (16×24 px)
     switch (capaProps[fila][col]) {
         case PROP_LAMPARA:  return Color(255, 220,  50, 255);
         case PROP_ANTORCHA: return Color(255, 140,  30, 255);
-        default:            return Color(  0,   0,   0,   0);  // invisible
+        default:            return Color(  0,   0,   0,   0);
+    }
+}
+
+Color Mapa::colorPropSuelo(int fila, int col) const {
+    // TODO_ARTISTA: reemplazar por textura PNG.
+    //   Ruta: assets/textures/tiles/props/suelo/
+    //   Archivos: charco.png, mancha.png, huesos.png (48×48 px)
+    switch (capaProps[fila][col]) {
+        case PROP_CHARCO:  return Color( 20,  40, 100, 180);   // azul oscuro semitransparente
+        case PROP_MANCHA:  return Color( 60,  30,  10, 200);   // marrón oscuro
+        case PROP_HUESOS:  return Color(220, 210, 180, 220);   // blanco hueso
+        default:           return Color(  0,   0,   0,   0);
     }
 }
 

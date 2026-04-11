@@ -28,11 +28,17 @@ void JuegoDungeon::inicia() {
     mapa    = new Mapa();
     jugador = new Jugador(mapa);
     editor  = new EditorMapa(mapa);
+    hud     = new Hud(jugador);
 
     agregaActor(mapa);
     // El editor va ANTES que el jugador para consumir teclas primero.
     agregaActor(editor);
     agregaActor(jugador);
+    // El HUD va al final para que dibuje siempre encima de todo.
+    agregaActor(hud);
+
+    // Conectar el HUD al jugador para que pueda enviar mensajes.
+    jugador->ponHud(hud);
 }
 
 // ============================================================
@@ -40,7 +46,7 @@ void JuegoDungeon::inicia() {
 // ============================================================
 
 void JuegoDungeon::posactualiza(double /*tiempo_seg*/) {
-    if (!mapa || !jugador || !editor) return;
+    if (!mapa || !jugador || !editor || !hud) return;
 
     if (!editor->estaActivo()) {
         // Modo juego: la cámara sigue al jugador.
@@ -55,10 +61,19 @@ void JuegoDungeon::posactualiza(double /*tiempo_seg*/) {
     // y el panel UI se dibujen alineados con los tiles del mapa.
     editor->ponOffsetCamara(offsetCamara);
     editor->ponZoom(zoomNivel);
+    hud   ->ponZoom(zoomNivel);
+
+    // Detectar la transición editor→juego para restaurar el fog of war.
+    bool editorActivoAhora = editor->estaActivo();
+    if (editorActivoAntes && !editorActivoAhora) {
+        mapa->resetearFog();
+        jugador->revelarDesdeJugador();
+    }
+    editorActivoAntes = editorActivoAhora;
 
     // Bloquear el jugador mientras el editor está activo
     // para que no reaccione a las mismas teclas que el cursor.
-    jugador->ponBloqueado(editor->estaActivo());
+    jugador->ponBloqueado(editorActivoAhora);
 
     mapa   ->ponPosicion(offsetCamara);
     jugador->ponPosicion(offsetCamara);
@@ -80,6 +95,9 @@ void JuegoDungeon::posactualiza(double /*tiempo_seg*/) {
 // ============================================================
 
 void JuegoDungeon::termina() {
+    extraeActor(hud);
+    delete hud; hud = nullptr;
+
     extraeActor(editor);
     extraeActor(jugador);
     extraeActor(mapa);

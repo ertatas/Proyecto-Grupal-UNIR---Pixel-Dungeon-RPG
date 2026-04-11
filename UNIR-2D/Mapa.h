@@ -33,9 +33,36 @@ public:
     };
 
     enum TipoProp {
+        // Props de PARED (valores 1-9): se colocan sobre BASE_PARED, offset visual hacia arriba.
         PROP_NADA      = 0,
         PROP_LAMPARA   = 1,
-        PROP_ANTORCHA  = 2
+        PROP_ANTORCHA  = 2,
+        // Props de SUELO (valores 10-19): se colocan sobre BASE_SUELO, centrados en el tile.
+        PROP_CHARCO    = 10,
+        PROP_MANCHA    = 11,
+        PROP_HUESOS    = 12
+    };
+
+    // Helpers para distinguir tipo de prop por rango de valor.
+    static bool esPropDePared(int t) { return t >= 1 && t <= 9;  }
+    static bool esPropDeSuelo(int t) { return t >= 10 && t <= 19; }
+
+    // --------------------------------------------------------
+    // VARIANTES VISUALES
+    // --------------------------------------------------------
+    // Cada tile puede tener una variante visual independiente
+    // de su tipo lógico. Afecta al color placeholder y, cuando
+    // se añadan PNGs, al sprite que se dibuja.
+    // El editor puede autodetectar la variante (detectarVariante)
+    // o permitir sobreescritura manual.
+    enum VarianteVisual {
+        VAR_DEFAULT  = 0,   // sin orientación definida
+        VAR_NORTE    = 1,   // pared cuya cara visible mira al sur  (suelo al norte)
+        VAR_SUR      = 2,   // pared cuya cara visible mira al norte (suelo al sur)
+        VAR_ESTE     = 3,   // pared cuya cara visible mira al oeste (suelo al este)
+        VAR_OESTE    = 4,   // pared cuya cara visible mira al este  (suelo al oeste)
+        VAR_PUERTA_H = 5,   // puerta horizontal (jugador la cruza moviéndose E/O)
+        VAR_PUERTA_V = 6,   // puerta vertical   (jugador la cruza moviéndose N/S)
     };
 
     enum TipoTrampaPublic {
@@ -73,8 +100,10 @@ public:
     int  numFilas()    const { return filas; }
     int  numColumnas() const { return columnas; }
 
-    int  getBase(int fila, int col) const;
-    int  getProp(int fila, int col) const;
+    int  getBase    (int fila, int col) const;
+    int  getProp    (int fila, int col) const;
+    int  getLlave   (int fila, int col) const;
+    int  getVariante(int fila, int col) const;
 
     int  getSpawnFila() const { return spawnFila; }
     int  getSpawnCol()  const { return spawnCol;  }
@@ -90,12 +119,19 @@ public:
     // ========================================================
     // API PÚBLICA – modificación (usada por el editor)
     // ========================================================
-    void setBase   (int fila, int col, int tipo);
-    void setProp   (int fila, int col, int tipo);
-    void setTrampa (int fila, int col, int tipo);
-    void setEnemigo(int fila, int col, int tipo);
-    void setLlave  (int fila, int col, int tipo);
-    void setSpawn  (int fila, int col);
+    void setBase    (int fila, int col, int tipo);
+    void setProp    (int fila, int col, int tipo);
+    void setTrampa  (int fila, int col, int tipo);
+    void setEnemigo (int fila, int col, int tipo);
+    void setLlave   (int fila, int col, int tipo);
+    void setSpawn   (int fila, int col);
+    // Establece la variante visual de un tile y actualiza su drawable.
+    void setVariante(int fila, int col, int variante);
+
+    // Analiza los vecinos del tile y devuelve la variante más apropiada
+    // para una pared o puerta. El editor la llama al pintar; el diseñador
+    // puede sobreescribirla después desde la capa VARIANTES.
+    VarianteVisual detectarVariante(int fila, int col) const;
 
     // Revela la zona conectada desde la posición del jugador (BFS).
     // Se expande por suelo y paredes; se detiene en puertas (abiertas o cerradas).
@@ -104,6 +140,10 @@ public:
 
     // Revela todo el mapa de golpe (usado por el editor al abrirse).
     void revelarTodo();
+
+    // Oculta todo el mapa (resetea el fog). Llamar al cerrar el editor
+    // y antes de re-revelar desde la posición del jugador.
+    void resetearFog();
 
     // ========================================================
     // PERSISTENCIA
@@ -143,7 +183,8 @@ private:
     std::vector<std::vector<int>> capaTrampas;
     std::vector<std::vector<int>> capaEnemigos;
     std::vector<std::vector<int>> capaLlaves;
-    std::vector<std::vector<int>> capaVisibilidad;   // VIS_OCULTO / VIS_RECORDADO / VIS_VISIBLE
+    std::vector<std::vector<int>> capaVisibilidad;   // VIS_OCULTO / VIS_VISIBLE
+    std::vector<std::vector<int>> capaVariantes;     // VarianteVisual por tile
     std::vector<std::vector<CoordenadasVisuales>> capaVisual;
 
     bool puertasAbiertasPorDefecto = false;
@@ -155,10 +196,11 @@ private:
     // DRAWABLES
     // ========================================================
     std::vector<unir2d::Rectangulo*> dibujosBase;
-    std::vector<unir2d::Rectangulo*> dibujosProps;
     std::vector<unir2d::Rectangulo*> dibujosTrampas;
     std::vector<unir2d::Rectangulo*> dibujosEnemigos;
     std::vector<unir2d::Rectangulo*> dibujosLlaves;
+    std::vector<unir2d::Rectangulo*> dibujosProps;    // props de PARED (índiceZ=2)
+    std::vector<unir2d::Rectangulo*> dibujosPropsS;   // props de SUELO (índiceZ=1)
 
     // ========================================================
     // CONSTRUCCIÓN INTERNA
@@ -179,9 +221,10 @@ private:
     int  tipoPuertaPorDefecto() const;
     bool esPared(int fila, int col) const;
 
-    unir2d::Color colorBase   (int fila, int col) const;
-    unir2d::Color colorProp   (int fila, int col) const;
-    unir2d::Color colorTrampa (int fila, int col) const;
-    unir2d::Color colorEnemigo(int fila, int col) const;
-    unir2d::Color colorLlave  (int fila, int col) const;
+    unir2d::Color colorBase      (int fila, int col) const;  // usa capaVariantes
+    unir2d::Color colorPropPared (int fila, int col) const;  // props de pared (1-9)
+    unir2d::Color colorPropSuelo (int fila, int col) const;  // props de suelo (10-19)
+    unir2d::Color colorTrampa    (int fila, int col) const;
+    unir2d::Color colorEnemigo   (int fila, int col) const;
+    unir2d::Color colorLlave     (int fila, int col) const;
 };

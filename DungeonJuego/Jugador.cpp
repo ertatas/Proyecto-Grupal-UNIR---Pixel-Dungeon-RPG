@@ -1,6 +1,7 @@
 #include "UNIR-2D.h"
 #include "Jugador.h"
 #include "Mapa.h"
+#include "Hud.h"
 #include <iostream>
 #include <filesystem>
 
@@ -164,14 +165,56 @@ void Jugador::intentarMover(int df, int dc) {
     }
 
     int nuevaFila = fila + df;
-    int nuevaCol = col + dc;
+    int nuevaCol  = col  + dc;
 
+    // ── Puerta cerrada ────────────────────────────────────────
+    if (mapa->getBase(nuevaFila, nuevaCol) == Mapa::BASE_PUERTA_CERRADA) {
+        if (llaves > 0) {
+            // Abrir la puerta y consumir una llave.
+            mapa->setBase(nuevaFila, nuevaCol, Mapa::BASE_PUERTA_ABIERTA);
+            llaves--;
+            enviarMensaje("Puerta abierta");
+            // Moverse al tile de la puerta ya abierta.
+            fila = nuevaFila;
+            col  = nuevaCol;
+            actualizarPosicionVisual();
+            mapa->revelarZonaDesde(fila, col);
+        } else {
+            enviarMensaje("Necesitas una llave para abrir esta puerta");
+        }
+        return;
+    }
+
+    // ── Movimiento normal ─────────────────────────────────────
     if (mapa->esTransitable(nuevaFila, nuevaCol)) {
         fila = nuevaFila;
-        col = nuevaCol;
+        col  = nuevaCol;
         actualizarPosicionVisual();
         mapa->revelarZonaDesde(fila, col);
+
+        // Recoger llave si hay una en este tile.
+        if (mapa->getLlave(fila, col) == Mapa::LLAVE_PUBLICA_NORMAL) {
+            llaves++;
+            mapa->setLlave(fila, col, Mapa::LLAVE_PUBLICA_NADA);
+            enviarMensaje("Llave recogida");
+        }
     }
+}
+
+// ============================================================
+// ENVIAR MENSAJE AL HUD
+// ============================================================
+
+void Jugador::enviarMensaje(const std::string& msg) {
+    if (hud) hud->agregarMensaje(msg);
+}
+
+// ============================================================
+// REVELAR DESDE POSICIÓN ACTUAL
+// ============================================================
+
+void Jugador::revelarDesdeJugador() {
+    mapa->revelarZonaDesde(fila, col);
 }
 
 // ============================================================
