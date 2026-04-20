@@ -63,7 +63,11 @@ Proyecto-Grupal-UNIR---Pixel-Dungeon-RPG/
 │           │   ├── base/
 │           │   │   ├── README.txt          ← especificaciones para artistas
 │           │   │   ├── suelo.png           ← pendiente artistas
-│           │   │   ├── pared_*.png         ← pendiente artistas (5 variantes)
+│           │   │   ├── pared_sur.png       ← YA EXISTE (VAR_SUR)
+│           │   │   ├── pared_norte.png     ← YA EXISTE (VAR_NORTE)
+│           │   │   ├── pared_este.png      ← YA EXISTE (VAR_ESTE)
+│           │   │   ├── pared_oeste.png     ← YA EXISTE (VAR_OESTE)
+│           │   │   ├── pared_default.png   ← YA EXISTE (VAR_DEFAULT)
 │           │   │   └── puerta/
 │           │   │       ├── README.txt
 │           │   │       └── puerta_*.png    ← pendiente artistas (4 variantes)
@@ -223,20 +227,22 @@ El fichero `mapa.txt` vive en `DungeonJuego/`. Si existe al arrancar, se carga a
 
 ## 6. Sistema de drawables del mapa
 
-Por cada tile se crean **6 Rectangulo*** en `crearDibujos()`:
+Por cada tile se crean **6 Rectangulo*** + **1 Imagen*** en `crearDibujos()`:
 
-| Índice | `ponIndiceZ` | Tamaño | Para qué |
-|---|---|---|---|
-| [0] Base | 0 | 64×64 px | Suelo / pared / puerta — color según `capaVariantes` |
-| [1] Trampa | 1 | 14×14 px centrado | Trampa (roja en editor) |
-| [2] Enemigo | 1 | 33×33 px centrado | Spawn enemigo (verde) |
-| [3] Llave | 1 | 12×12 px arriba-centro | Llave (amarilla) |
-| [4] Prop pared | 2 | 16×24 px centrado-arriba | Lámpara / antorcha (props 1-9) |
-| [5] Prop suelo | 1 | 48×48 px centrado | Charco / mancha / huesos (props 10-19) |
+| Índice | Tipo | `ponIndiceZ` | Tamaño | Para qué |
+|---|---|---|---|---|
+| [0] Base | `Rectangulo` | 0 | 64×64 px | Suelo / puerta / pared sin PNG — color según `capaVariantes`; transparente si [6] está activo |
+| [1] Trampa | `Rectangulo` | 1 | 14×14 px centrado | Trampa (roja en editor) |
+| [2] Enemigo | `Rectangulo` | 1 | 33×33 px centrado | Spawn enemigo (verde) |
+| [3] Llave | `Rectangulo` | 1 | 12×12 px arriba-centro | Llave (amarilla) |
+| [4] Prop pared | `Rectangulo` | 2 | 16×24 px centrado-arriba | Lámpara / antorcha (props 1-9) |
+| [5] Prop suelo | `Rectangulo` | 1 | 48×48 px centrado | Charco / mancha / huesos (props 10-19) |
+| [6] Pared PNG | `Imagen` | 0 | 64×64 px | PNG de pared si `texturasParedCargadas == true`; oculto en caso contrario |
 
 `refrescarDibujos()` aplica la visibilidad:
-- `VIS_OCULTO` → base negro opaco, resto alfa=0.
-- `VIS_VISIBLE` → colores normales; drawables [4] y [5] son mutuamente excluyentes (solo uno visible según el tipo de prop del tile).
+- `VIS_OCULTO` → Rectangulo[0] negro opaco, Imagen[6] oculta, resto alfa=0.
+- `VIS_VISIBLE BASE_PARED` con PNG → Imagen[6] visible con textura de la variante; Rectangulo[0] transparente.
+- `VIS_VISIBLE` otros tiles o sin PNG → colores normales; drawables [4] y [5] mutuamente excluyentes.
 
 ---
 
@@ -316,13 +322,17 @@ Las habitaciones deben estar **completamente cerradas por paredes**, con **puert
 
 ## 11. Mapa de prueba incluido (DungeonJuego/mapa.txt)
 
-3 habitaciones en fila horizontal, filas 3–9 del mapa 32×32:
+3 habitaciones separadas conectadas por pasillos con llave y puerta cerrada (formato DUNGEON_MAP 1):
 
-| Habitación | Cols (suelo) | Contenido | Conexión |
+| Zona | Posición | Contenido | Conexión |
 |---|---|---|---|
-| A — inicio | 3–11 | Spawn (6,5) · trampa (6,11) · antorcha (4,5) | Puerta ABIERTA (6,12) → B |
-| B — peligro | 13–21 | Enemigo (5,17) · lámpara (4,17) | Puerta CERRADA (6,22) → C |
-| C — objetivo | 23–29 | Llave (5,26) · antorcha (4,26) | — |
+| Sala A — inicio | Filas 3–9, cols 2–11 | Spawn (6,6) | Puerta ABIERTA (6,12) → pasillo |
+| Pasillo H | Filas 5–7, cols 13–18 | — | Puerta ABIERTA (6,19) → Sala B |
+| Sala B — llave | Filas 3–9, cols 20–29 | Llave (6,25) | Puerta ABIERTA (10,24) → pasillo |
+| Pasillo V | Filas 11–18, col 24 | — | Puerta CERRADA (19,24) → Sala C |
+| Sala C — objetivo | Filas 20–27, cols 12–28 | — | — |
+
+**Flujo del puzle:** el jugador parte en Sala A → recorre el pasillo horizontal hasta Sala B → recoge la llave → baja por el pasillo vertical → abre la puerta cerrada → entra en Sala C.
 
 ---
 
@@ -390,6 +400,22 @@ int llavesTotales = jugador->getLlaves();   // para el HUD
 hud->agregarMensaje("texto");                // duración por defecto 4 s
 hud->agregarMensaje("texto urgente", 6.0f);  // duración personalizada
 ```
+
+---
+
+### ✅ Texturas PNG en paredes direccionales (IMPLEMENTADO — 2026-04-20)
+
+**Archivos modificados:**
+- `UNIR-2D/Mapa.h` — añadidos `dibujosBaseImg` (vector Imagen*), 5 punteros `texPared*`, `texturasParedCargadas`.
+- `UNIR-2D/Mapa.cpp` — carga de 5 texturas en `inicia()` (patrón Jugador, 5 rutas, todo-o-nada); `Imagen*` por tile en `crearDibujos()`; lógica PNG/placeholder en `refrescarDibujos()`; limpieza en `termina()` y `limpiarListasDibujos()`.
+
+**Comportamiento:**
+- Si los 5 PNGs existen en `assets/textures/tiles/base/`: paredes muestran sprite según variante.
+- Si falta cualquier PNG: log en consola + rectangles de color para todas las paredes. Sin crash.
+- `VIS_OCULTO` → siempre negro opaco, independientemente de texturas.
+- `VAR_OESTE`: usa `texParedOeste` con `ponEscala(-1,1)` + offset X para volteo horizontal (misma textura que `VAR_ESTE` pero en espejo).
+- En modo editor (`enModoEditor=true`) todas las paredes muestran placeholder de color para facilitar la edición; al salir del editor se restauran las texturas PNG.
+- Suelo y puertas: sin cambios, siguen con Rectangulo placeholder.
 
 ---
 
@@ -487,6 +513,10 @@ Buscar el marcador `TODO_HUD_STATS` en `Hud.cpp` para ver el punto exacto de int
 | HUD en coordenadas de pantalla fijas usando el mismo patrón que EditorMapa | Los drawables del HUD se posicionan con `(sx-WIN_CX)/zoom+WIN_CX`; ni el HUD ni el editor reciben `ponPosicion(offsetCamara)` |
 | Mensajes con doble expiración: empuje por cola llena + fade por tiempo | Si llegan >5 mensajes simultáneos el más antiguo se descarta; los mensajes con tiempo restante <1s hacen fade |
 | Jugador desacoplado del HUD mediante puntero opcional (puede ser nullptr) | `enviarMensaje()` comprueba `if (hud)` antes de llamar; se puede instanciar Jugador sin HUD sin romper nada |
+| Texturas de pared con fallback a placeholder: si falta cualquier PNG se usa el sistema de colores completo sin crashear | Todo-o-nada: cargar los 5 PNGs o ninguno; el juego siempre es funcional |
+| Mismo patrón de carga de assets que Jugador (5 rutas, try/catch, log si falla) | Coherencia; Jugador::cargarSpriteJugador() es el único precedente en el proyecto. La 5ª ruta cubre el caso exe en UNIR-2D/x64/Debug/ |
+| VAR_OESTE usa la misma textura que VAR_ESTE pero con flip horizontal (ponEscala -1,1) | pared_este.png y pared_oeste.png son la misma geometría de ladrillo; el espejo evita entregar un PNG adicional |
+| Editor muestra placeholders de color aunque haya PNGs cargados | Los tonos de variante (gris azulado, rojizo…) son más útiles para editar que la textura real |
 
 ---
 

@@ -54,8 +54,8 @@ namespace unir2d {
 		/// @param valor Posición del punto origen de la instancia.
 		void ponOrigen (Vector valor);
 
-		//Vector escala () const;
-		//void ponEscala (Vector valor);
+		Vector escala () const;
+		void ponEscala (Vector valor);
 
 		/// @brief Establece la posición de la instancia.
 		/// @details La posición es relativa a la posición y a la orientación del actor contenedor. La 
@@ -138,13 +138,13 @@ namespace unir2d {
 		m_transforma.ponOrigen (valor);
 	}
 
-	//inline Vector Dibujable::escala () const {
-	//	return m_transforma.escala ();
-	//}
+	inline Vector Dibujable::escala () const {
+		return m_transforma.escala ();
+	}
 
-	//inline void Dibujable::ponEscala (Vector valor) {
-	//	m_transforma.ponEscala (valor);
-	//}
+	inline void Dibujable::ponEscala (Vector valor) {
+		m_transforma.ponEscala (valor);
+	}
 
 	inline Vector Dibujable::posicion () const {
 		return m_transforma.posicion ();

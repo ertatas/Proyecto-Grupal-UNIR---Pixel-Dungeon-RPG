@@ -65,6 +65,7 @@ void JuegoDungeon::posactualiza(double /*tiempo_seg*/) {
 
     // Detectar la transición editor→juego para restaurar el fog of war.
     bool editorActivoAhora = editor->estaActivo();
+    mapa->ponModoEditor(editorActivoAhora);
     if (editorActivoAntes && !editorActivoAhora) {
         mapa->resetearFog();
         jugador->revelarDesdeJugador();

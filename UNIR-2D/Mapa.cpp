@@ -35,6 +35,46 @@ Mapa::~Mapa() {}
 // ============================================================
 
 void Mapa::inicia() {
+    // Cargar texturas de pared (patrón idéntico a Jugador::cargarSpriteJugador).
+    // Se prueban 4 rutas posibles. Si falta cualquier PNG: placeholders de color sin crash.
+    if (!texturasParedCargadas) {
+        std::cout << "MAPA: cwd = " << fs::current_path().string() << "\n";
+        // Mismas rutas que Jugador::cargarSpriteJugador + ruta para exe en UNIR-2D/x64/Debug/
+        const fs::path dirs[] = {
+            fs::current_path() / "assets" / "textures" / "tiles" / "base",
+            fs::current_path() / "DungeonJuego" / "assets" / "textures" / "tiles" / "base",
+            fs::current_path().parent_path() / "assets" / "textures" / "tiles" / "base",
+            fs::current_path().parent_path().parent_path() / "assets" / "textures" / "tiles" / "base",
+            fs::current_path().parent_path().parent_path().parent_path() / "DungeonJuego" / "assets" / "textures" / "tiles" / "base"
+        };
+        fs::path dir;
+        for (auto& d : dirs) {
+            bool existe = fs::exists(d / "pared_sur.png");
+            std::cout << "MAPA: buscando en " << d.string() << " ... " << (existe ? "ENCONTRADO" : "no encontrado") << "\n";
+            if (existe) { dir = d; break; }
+        }
+        if (dir.empty()) {
+            std::cout << "MAPA: no se pudieron cargar texturas de pared, usando placeholders\n";
+        } else {
+            try {
+                texParedSur     = new Textura(); texParedSur    ->carga(dir / "pared_sur.png");
+                texParedNorte   = new Textura(); texParedNorte  ->carga(dir / "pared_norte.png");
+                texParedEste    = new Textura(); texParedEste   ->carga(dir / "pared_este.png");
+                texParedOeste   = new Textura(); texParedOeste  ->carga(dir / "pared_oeste.png");
+                texParedDefault = new Textura(); texParedDefault->carga(dir / "pared_default.png");
+                texturasParedCargadas = true;
+                std::cout << "MAPA: texturas de pared cargadas OK desde " << dir.string() << "\n";
+            } catch (const std::exception& e) {
+                std::cout << "MAPA: no se pudieron cargar texturas de pared, usando placeholders\n";
+                std::cout << "  error: " << e.what() << "\n";
+                delete texParedSur;     texParedSur     = nullptr;
+                delete texParedNorte;   texParedNorte   = nullptr;
+                delete texParedEste;    texParedEste    = nullptr;
+                delete texParedOeste;   texParedOeste   = nullptr;
+                delete texParedDefault; texParedDefault = nullptr;
+            }
+        }
+    }
     crearDibujos();
     refrescarDibujos();
 }
@@ -42,6 +82,12 @@ void Mapa::inicia() {
 void Mapa::termina() {
     extraeDibujos();
     limpiarListasDibujos();
+    delete texParedSur;     texParedSur     = nullptr;
+    delete texParedNorte;   texParedNorte   = nullptr;
+    delete texParedEste;    texParedEste    = nullptr;
+    delete texParedOeste;   texParedOeste   = nullptr;
+    delete texParedDefault; texParedDefault = nullptr;
+    texturasParedCargadas = false;
 }
 
 // ============================================================
@@ -507,6 +553,15 @@ void Mapa::crearDibujos() {
             rPropS->ponIndiceZ(1);
             agregaDibujo(rPropS);
             dibujosPropsS.push_back(rPropS);
+
+            // [6] IMAGEN DE PARED con PNG — oculta por defecto.
+            // Solo se hace visible en refrescarDibujos() para BASE_PARED con texturasParedCargadas.
+            Imagen* rImg = new Imagen{};
+            rImg->ponPosicion(Vector(tx, ty));
+            rImg->ponIndiceZ(0);
+            rImg->ponVisible(false);
+            agregaDibujo(rImg);
+            dibujosBaseImg.push_back(rImg);
         }
     }
 }
@@ -527,16 +582,52 @@ void Mapa::refrescarDibujos() {
             dibujosBase[i]->ponPosicion(Vector(tx, ty));
 
             if (capaVisibilidad[f][c] == VIS_OCULTO) {
-                // Zona no explorada: negro absoluto, el resto invisible.
+                // Zona no explorada: negro absoluto, PNG de pared oculto.
                 dibujosBase[i]    ->ponColor(negroOpaco);
+                dibujosBaseImg[i] ->ponVisible(false);
                 dibujosTrampas[i] ->ponColor(transparente);
                 dibujosEnemigos[i]->ponColor(transparente);
                 dibujosLlaves[i]  ->ponColor(transparente);
                 dibujosProps[i]   ->ponColor(transparente);
                 dibujosPropsS[i]  ->ponColor(transparente);
             } else {
-                // Zona visible: colores normales según tipo y variante.
-                dibujosBase[i]    ->ponColor(colorBase   (f, c));
+                // Zona visible.
+                // Para BASE_PARED con texturas cargadas, usar Imagen con el PNG de la variante.
+                // En cualquier otro caso, usar el Rectangulo de color (placeholder).
+                int base = capaBase[f][c];
+                int var  = capaVariantes[f][c];
+
+                if (texturasParedCargadas && !enModoEditor && base == BASE_PARED) {
+                    Textura* tex = nullptr;
+                    bool flipH   = false;
+                    switch (var) {
+                        case VAR_SUR:     tex = texParedSur;     break;
+                        case VAR_NORTE:   tex = texParedNorte;   break;
+                        case VAR_ESTE:    tex = texParedOeste;   break;
+                        case VAR_OESTE:   tex = texParedOeste;   flipH = true; break;
+                        case VAR_DEFAULT: tex = texParedDefault; break;
+                        default:          break;  // PUERTA_H/V: sin PNG de pared
+                    }
+                    if (tex) {
+                        dibujosBaseImg[i]->asigna(tex);
+                        if (flipH) {
+                            dibujosBaseImg[i]->ponEscala(Vector(-1.f, 1.f));
+                            dibujosBaseImg[i]->ponPosicion(Vector(tx + tamCasilla, ty));
+                        } else {
+                            dibujosBaseImg[i]->ponEscala(Vector(1.f, 1.f));
+                            dibujosBaseImg[i]->ponPosicion(Vector(tx, ty));
+                        }
+                        dibujosBaseImg[i]->ponVisible(true);
+                        dibujosBase[i]->ponColor(transparente);
+                    } else {
+                        dibujosBaseImg[i]->ponVisible(false);
+                        dibujosBase[i]->ponColor(colorBase(f, c));
+                    }
+                } else {
+                    dibujosBaseImg[i]->ponVisible(false);
+                    dibujosBase[i]->ponColor(colorBase(f, c));
+                }
+
                 dibujosTrampas[i] ->ponColor(colorTrampa (f, c));
                 dibujosEnemigos[i]->ponColor(colorEnemigo(f, c));
                 dibujosLlaves[i]  ->ponColor(colorLlave  (f, c));
@@ -565,6 +656,7 @@ void Mapa::limpiarListasDibujos() {
     dibujosLlaves  .clear();
     dibujosProps   .clear();
     dibujosPropsS  .clear();
+    dibujosBaseImg .clear();
 }
 
 // ============================================================

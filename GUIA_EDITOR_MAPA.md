@@ -292,12 +292,12 @@ DungeonJuego/assets/textures/
 │       └── hero_idle.png        ← YA EXISTE — no tocar
 ├── tiles/
 │   ├── base/
-│   │   ├── suelo.png
-│   │   ├── pared_default.png    ← pared sin orientación
-│   │   ├── pared_norte.png      ← pared orientada al norte
-│   │   ├── pared_sur.png
-│   │   ├── pared_este.png
-│   │   ├── pared_oeste.png
+│   │   ├── suelo.png            ← pendiente artistas
+│   │   ├── pared_default.png    ✅ ENTREGADO — pared sin orientación
+│   │   ├── pared_norte.png      ✅ ENTREGADO
+│   │   ├── pared_sur.png        ✅ ENTREGADO
+│   │   ├── pared_este.png       ✅ ENTREGADO (se usa también para pared oeste, espejada)
+│   │   └── pared_oeste.png      ← no necesario; el motor genera el espejo de pared_este.png
 │   │   └── puerta/
 │   │       ├── puerta_h_cerrada.png
 │   │       ├── puerta_h_abierta.png
@@ -346,6 +346,8 @@ Para encontrar todos los puntos de integración de una vez:
 ```
 grep TODO_ARTISTA UNIR-2D/Mapa.cpp
 ```
+
+> **Nota sobre los PNGs de pared:** los archivos `pared_sur.png`, `pared_norte.png`, `pared_este.png` y `pared_default.png` ya están integrados. La pared oeste se genera automáticamente espejando `pared_este.png`, por lo que `pared_oeste.png` no es necesario. Si cambias un PNG, reinicia el juego para ver los cambios. Si el nombre es incorrecto, el juego carga en modo placeholder de colores automáticamente.
 
 ---
 
@@ -440,6 +442,24 @@ grep TODO_ARTISTA UNIR-2D/Mapa.cpp
 Para verificar que la variante se está aplicando:
 1. Entra en capa VARIANTES (A/D hasta el banner gris plateado).
 2. Mueve el cursor sobre una pared — el indicador amarillo del panel mostrará qué tipo está seleccionado.
+
+---
+
+### "En el editor (F1) las paredes muestran colores en lugar de PNGs"
+
+**Aclaración:** esto es **intencionado**. El editor usa los colores placeholder para que las variantes de pared (norte/sur/este/oeste) sean visualmente distinguibles durante la edición. Al salir del editor (F1) se muestran los PNGs reales.
+
+---
+
+### "Las paredes siguen siendo rectángulos de color en lugar de mostrar los PNGs"
+
+**Causa:** el juego no encontró los archivos PNG o alguno tiene nombre incorrecto.
+
+**Solución:**
+1. Verificar que los 5 archivos están en `DungeonJuego/assets/textures/tiles/base/` con estos nombres exactos:
+   - `pared_sur.png` · `pared_norte.png` · `pared_este.png` · `pared_oeste.png` · `pared_default.png`
+2. Comprobar la consola al arrancar: si aparece `MAPA: no se pudieron cargar texturas de pared, usando placeholders` indica qué falló.
+3. Los nombres son sensibles a mayúsculas en Linux; en Windows no, pero mejor mantenerlos en minúsculas.
 
 ---
 

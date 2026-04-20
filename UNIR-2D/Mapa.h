@@ -153,6 +153,14 @@ public:
     void guardarMapa(const std::string& ruta = "") const;
     void cargarMapa (const std::string& ruta = "");
 
+    // Activa/desactiva el modo editor: en modo editor se usan placeholders de color
+    // para facilitar la edición (las variantes se distinguen por tono).
+    void ponModoEditor(bool valor) {
+        if (enModoEditor == valor) return;
+        enModoEditor = valor;
+        if (!dibujosBase.empty()) refrescarDibujos();
+    }
+
 private:
     // ========================================================
     // ENUMS INTERNOS
@@ -201,6 +209,18 @@ private:
     std::vector<unir2d::Rectangulo*> dibujosLlaves;
     std::vector<unir2d::Rectangulo*> dibujosProps;    // props de PARED (índiceZ=2)
     std::vector<unir2d::Rectangulo*> dibujosPropsS;   // props de SUELO (índiceZ=1)
+
+    // Imagen por tile para mostrar el PNG de pared (oculta si no hay textura o no es pared)
+    std::vector<unir2d::Imagen*>     dibujosBaseImg;
+
+    // Texturas de pared direccionales — cargadas una vez en inicia(), nullptr si no se encontraron
+    unir2d::Textura* texParedSur     = nullptr;
+    unir2d::Textura* texParedNorte   = nullptr;
+    unir2d::Textura* texParedEste    = nullptr;
+    unir2d::Textura* texParedOeste   = nullptr;
+    unir2d::Textura* texParedDefault = nullptr;
+    bool texturasParedCargadas       = false;
+    bool enModoEditor                = false;
 
     // ========================================================
     // CONSTRUCCIÓN INTERNA
