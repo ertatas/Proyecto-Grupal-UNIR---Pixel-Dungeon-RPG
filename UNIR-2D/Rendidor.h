@@ -19,7 +19,9 @@
 
 
 namespace unir2d {
- 
+
+    class HudTexto;
+
 
     class Rendidor {
     private:
@@ -54,6 +56,7 @@ namespace unir2d {
         friend class Baldosas;
         friend class Malla;
         friend class Texto;
+        friend class HudTexto;
 
     };
 

@@ -1,14 +1,17 @@
-Archivos de fuente para el HUD.
+FUENTES DEL HUD — Pixel Dungeon RPG
+====================================
 
-ATENCION: el motor UNIR-2D carga fuentes desde {directorio_trabajo}/fuentes/
-no desde esta carpeta. Esta carpeta es solo para que los artistas depositen
-los archivos antes de que el programador los mueva al lugar correcto.
+Depositar aquí un archivo .ttf con el nombre 'fuente.ttf'.
+El HUD intentará cargar 'fuente.ttf' primero; si no existe,
+cargará 'PressStart2P-Regular.ttf' como fallback.
 
-Archivos esperados:
-  DejaVuSans.ttf  — fuente sans-serif legible a tamanhos pequenhos
+Tamaño de render usado: 12 px (escalado según zoom de cámara).
 
-Una vez entregado, el programador lo copia a:
-  DungeonJuego/fuentes/DejaVuSans.ttf
+Fuentes recomendadas (libres de derechos):
+  - Press Start 2P  — pixel art perfecto para dungeon
+    (ya incluida como PressStart2P-Regular.ttf)
+  - Liberation Mono — neutra y legible
+  - Roboto Mono     — Google Fonts
 
-Alternativa: cualquier fuente .ttf libre puede usarse. Cambiar el nombre
-en Hud.cpp (linea con new Texto("DejaVuSans")) para que coincida.
+Si no hay ningún archivo .ttf los paneles del HUD se muestran
+sin texto. El juego NO crashea.

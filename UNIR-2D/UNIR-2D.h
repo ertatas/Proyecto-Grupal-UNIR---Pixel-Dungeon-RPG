@@ -73,3 +73,4 @@ using wstring = std::wstring;
 #include "JuegoBase.h"
 #include "Motor.h"
 #include "Rendidor.h"
+#include "HudTexto.h"

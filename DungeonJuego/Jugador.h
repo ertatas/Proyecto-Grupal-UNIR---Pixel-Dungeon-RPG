@@ -33,7 +33,11 @@ private:
     bool bloqueado = false;
 
     // Llaves recogidas del suelo.
-    int llaves = 0;
+    int llaves  = 0;
+
+    // Vida del jugador.
+    int vida    = 100;
+    int vidaMax = 100;
 
     // Estado anterior del teclado.
     bool izquierdaPulsada = false;
@@ -52,7 +56,11 @@ public:
     void ponHud(Hud* h) { hud = h; }
 
     // Número de llaves en el inventario.
-    int getLlaves() const { return llaves; }
+    int getLlaves()  const { return llaves; }
+
+    // Vida y vida máxima del jugador.
+    int getVida()    const { return vida; }
+    int getVidaMax() const { return vidaMax; }
 
     void inicia() override;
     void termina() override;

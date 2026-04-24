@@ -42,6 +42,7 @@ Proyecto-Grupal-UNIR---Pixel-Dungeon-RPG/
 │   ├── Teclado.h / .cpp        ← Input teclado (edge detection)
 │   ├── Raton.h / .cpp          ← Input ratón
 │   ├── Texto.h / .cpp          ← Wrapper sf::Text (fuente por nombre desde fuentes/)
+│   ├── HudTexto.h              ← Dibujable custom: sf::Text con sf::Font* externo (para el HUD)
 │   └── Color.h                 ← Color RGBA inmutable (métodos: rojo(), verde(), azul(), alfa())
 │
 ├── DungeonJuego/               ← Código del juego
@@ -53,8 +54,9 @@ Proyecto-Grupal-UNIR---Pixel-Dungeon-RPG/
 │   ├── fuentes/                ← Fuentes TrueType para el HUD
 │   │   └── README.txt          ← Instrucciones: copiar DejaVuSans.ttf aquí
 │   └── assets/
-│       ├── fonts/              ← Carpeta de entrega para artistas (luego mover a fuentes/)
-│       │   └── README.txt
+│       ├── fonts/              ← Fuente TTF para el HUD (cargada directamente vía sf::Font)
+│       │   ├── README.txt
+│       │   └── PressStart2P-Regular.ttf  ← YA EXISTE (cargado como fallback si no hay fuente.ttf)
 │       └── textures/
 │           ├── characters/
 │           │   └── hero/
@@ -403,6 +405,28 @@ hud->agregarMensaje("texto urgente", 6.0f);  // duración personalizada
 
 ---
 
+### ✅ HUD completo: panel stats + consola funcional (IMPLEMENTADO — 2026-04-24)
+
+**Archivos creados:**
+- `UNIR-2D/HudTexto.h` — `Dibujable` subclass en `unir2d` namespace que wrappea `sf::Text` con `sf::Font*` externo. Permite usar cualquier TTF sin depender del directorio `fuentes/`.
+
+**Archivos modificados:**
+- `UNIR-2D/Rendidor.h` — añadido forward declaration `class HudTexto;` y `friend class HudTexto;` para dar acceso a `window`.
+- `UNIR-2D/UNIR-2D.h` — añadido `#include "HudTexto.h"` al final (después de Rendidor.h).
+- `DungeonJuego/Jugador.h` — añadido `int vida=100, vidaMax=100` (private) + getters `getVida()` / `getVidaMax()` (public inline).
+- `DungeonJuego/Hud.h` — añadido `sf::Font fuente; bool fuenteCargada`; miembros para retrato/llave_icon (Textura*, Imagen*, bool, Rectangulo* placeholder); tres `HudTexto*` para stats; helpers `cargarFuente()` / `cargarImagen()`.
+- `DungeonJuego/Hud.cpp` — reescrito: carga `sf::Font` desde `assets/fonts/` con multi-ruta; panel stats 210×110 con retrato+vida+llave+reservado; consola de mensajes con `HudTexto`; texto escalado por zoom.
+- `DungeonJuego/assets/fonts/README.txt` — instrucciones para el equipo de arte.
+
+**Comportamiento:**
+- Panel stats: retrato (placeholder morado 48×48 o PNG `retrato_heroe.png`), texto "vida/vidaMax", icono llave (placeholder amarillo 16×16 o PNG `llave_icon.png`), contador llaves, texto "?: 0" reservado.
+- Panel consola: hasta 5 mensajes, fade-out en último segundo, más recientes abajo.
+- Con `PressStart2P-Regular.ttf` en `assets/fonts/`: texto visible completo.
+- Sin fuente: paneles y placeholders visibles, sin texto, sin crash.
+- El contador de llaves y vida se actualiza cada frame en `actualizarVisual()`.
+
+---
+
 ### ✅ Texturas PNG en paredes direccionales (IMPLEMENTADO — 2026-04-20)
 
 **Archivos modificados:**
@@ -432,8 +456,19 @@ Los tamaños de los rectángulos se dividen por zoom para que aparezcan del mism
 
 | Panel | Posición pantalla | Tamaño pantalla | Color |
 |---|---|---|---|
-| `panelStats` | x=10, y=10 | 200×90 px | Negro semitransparente (0,0,0,170) |
+| `panelStats` | x=10, y=10 | 210×110 px | Negro semitransparente (0,0,0,160) |
 | `panelConsola` | x=10, y=WINDOW_H-170 | 320×160 px | Azul oscuro (0,20,60,150) |
+
+### Layout panel stats (coordenadas de pantalla) — estado final sesión 2026-04-24
+
+| Elemento | Pos X | Pos Y | Tamaño | Drawable |
+|---|---|---|---|---|
+| Retrato | 18 | 18 | 48×48 px | `Imagen*` / placeholder `Rectangulo` (80,80,120) |
+| Texto vida | 74 | 22 | 12 px | `HudTexto*` — `"vida/vidaMax"` |
+| Icono llave | 74 | 42 | 24×24 px | `Imagen*` / placeholder `Rectangulo` (200,180,0) |
+| Texto llaves | 102 | 48 | 12 px | `HudTexto*` — `std::to_string(getLlaves())` |
+
+Panel stats: 210×80 px.
 
 ### Estructura MensajeConsola
 
@@ -471,27 +506,41 @@ void MiActor::algúnEvento() {
 miActor->ponHud(hud);
 ```
 
-### TODO_HUD_STATS — qué falta en el panel superior
+### Consola de mensajes — especificaciones finales
 
-El `panelStats` es actualmente un rectángulo vacío. Para completarlo:
-1. Añadir `unir2d::Texto` con `jugador->getLlaves()` formateado.
-2. Añadir `unir2d::Imagen` con `llave_icon.png` desde `assets/textures/ui/`.
-3. Añadir `unir2d::Imagen` con `retrato_heroe.png` y `corazon.png` cuando se implemente vida.
-Buscar el marcador `TODO_HUD_STATS` en `Hud.cpp` para ver el punto exacto de integración.
+- Panel: 500×160 px (x=10, y=WINDOW_H-170), azul oscuro (0,20,60,150)
+- Fuente: `PressStart2P-Regular.ttf` a 8 px desde `assets/fonts/`
+- Word-wrap automático: función `wrapLinea()` en `Hud.cpp`, 56 chars por línea
+- 8 líneas visibles (`MAX_LINEAS=8`), cola de 5 mensajes (`MAX_MENSAJES=5`)
+- Mensajes desde arriba (slot 0 = más antiguo), fade-out en el último segundo
+- `ponZoom()` llama `actualizarVisual()` para evitar lag de 1 frame
 
-### Fuente
+### Fuente y renderizado
 
-`unir2d::Texto` carga fuentes desde `{cwd}/fuentes/{nombre}.ttf`. El HUD usa `"DejaVuSans"`:
-- **Archivo:** `DungeonJuego/fuentes/DejaVuSans.ttf`
-- **Origen:** copiar desde `UNIR-2D/fuentes/DejaVuSans.ttf`
-- **Si no existe:** paneles visibles, texto ausente — sin crash (try/catch en `inicia()`).
+- **Clase:** `unir2d::HudTexto` — `Dibujable` que, en `dibuja()`, guarda la vista SFML, activa `getDefaultView()`, dibuja `sf::Text` en coordenadas de pantalla exactas y restaura la vista. Esto evita que el zoom de cámara blur la fuente.
+- **Posicionado con:** `ponPosicionPantalla(sx, sy)` — NO usar `ponPosicion()`.
+- **Tamaño:** valor en px directo (no dividir por zoom).
+- **Búsqueda fuente:** intenta `assets/fonts/fuente.ttf` y `assets/fonts/PressStart2P-Regular.ttf` en 4 rutas.
+- **Si no existe:** paneles y placeholders visibles, sin texto — sin crash.
 
 ### Índices Z del HUD
 
 | Drawable | `ponIndiceZ` |
 |---|---|
 | Paneles (Rectangulo) | 150 |
-| Textos de mensajes | 160 |
+| Imágenes / placeholders de stats | 151 |
+| Textos (HudTexto) | 160 |
+
+### Visibilidad en modo editor
+
+`JuegoDungeon::posactualiza()` llama `hud->ponModoEditor(editorActivoAhora)` cada frame.
+`ponModoEditor(true)` → `actualizarVisual()` itera `dibujos()` y oculta todo con `ponVisible(false)`.
+`ponModoEditor(false)` → `actualizarVisual()` restaura visibilidad normal (paneles, placeholders, textos).
+
+### Estado incompleto — pendiente próxima sesión
+
+- `vida` / `vidaMax` existen en `Jugador` pero son estáticos (100/100) — conectar con sistema de daño
+- `retrato_heroe.png` (48×48) y `llave_icon.png` (24×24) pendientes de arte
 
 ---
 
@@ -517,6 +566,9 @@ Buscar el marcador `TODO_HUD_STATS` en `Hud.cpp` para ver el punto exacto de int
 | Mismo patrón de carga de assets que Jugador (5 rutas, try/catch, log si falla) | Coherencia; Jugador::cargarSpriteJugador() es el único precedente en el proyecto. La 5ª ruta cubre el caso exe en UNIR-2D/x64/Debug/ |
 | VAR_OESTE usa la misma textura que VAR_ESTE pero con flip horizontal (ponEscala -1,1) | pared_este.png y pared_oeste.png son la misma geometría de ladrillo; el espejo evita entregar un PNG adicional |
 | Editor muestra placeholders de color aunque haya PNGs cargados | Los tonos de variante (gris azulado, rojizo…) son más útiles para editar que la textura real |
+| `HudTexto` como `Dibujable` custom en `unir2d` namespace con `sf::Font*` externo | El motor solo carga fuentes desde `fuentes/`; el HUD necesita cargar desde `assets/fonts/`. La nueva clase puente permite usar cualquier TTF sin tocar el sistema de `Fuentes` del motor |
+| `fuenteCargada` controlado por `sf::Font::loadFromFile()` de `assets/fonts/` | Coherente con el PROMPT y con la ubicación real del asset; si la fuente existe el texto aparece, si no solo los paneles |
+| Placeholders de Rectangulo para retrato/llave_icon del HUD | Misma estrategia que Mapa con paredes: el juego es siempre jugable sin assets de arte |
 
 ---
 

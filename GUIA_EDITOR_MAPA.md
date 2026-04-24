@@ -479,34 +479,51 @@ Para verificar que la variante se está aplicando:
 
 El HUD es una capa de interfaz fija que se dibuja **siempre en las mismas posiciones de pantalla**, independientemente del zoom y la cámara. No forma parte del mapa; no se puede editar con el editor.
 
+> ⚠️ **El HUD está parcialmente implementado.** Los sistemas de texto y paneles funcionan. La vida siempre vale 100 hasta que se implemente el sistema de combate. Los iconos de retrato y llave muestran placeholders de color hasta que arte entregue los PNGs.
+>
+> El HUD **se oculta automáticamente** al entrar en el editor (F1) y **vuelve a aparecer** al cerrarlo.
+
+---
+
 ### Panel superior izquierda — estadísticas del jugador
 
-- **Posición:** esquina superior izquierda (x=10, y=10 px).
-- **Tamaño:** 200×90 px.
-- **Color:** negro semitransparente.
-- **Contenido actual:** placeholder vacío (rectángulo negro).
-- **Contenido futuro:** retrato del personaje, contador de vida, contador de llaves.
+- **Posición:** esquina superior izquierda (x=10, y=10 px)
+- **Tamaño:** 210×80 px — negro semitransparente
+- **Layout de izquierda a derecha / arriba a abajo:**
 
-> Este panel está pendiente de assets. Ver `TODO_HUD_STATS` en `DungeonJuego/Hud.cpp`.
+| Elemento | Posición pantalla | Tamaño | Estado |
+|---|---|---|---|
+| Retrato personaje | x=18, y=18 | 48×48 px | ⚠️ Placeholder morado hasta que arte entregue `retrato_heroe.png` |
+| Vida | x=74, y=22 | 12 px | ✅ Muestra `100/100` — falta sistema de daño |
+| Icono llave | x=74, y=42 | 24×24 px | ⚠️ Placeholder amarillo hasta que arte entregue `llave_icon.png` |
+| Nº llaves | x=102, y=48 | 12 px | ✅ Se actualiza al recoger/gastar llaves |
+
+---
 
 ### Panel inferior izquierda — consola de mensajes
 
-- **Posición:** esquina inferior izquierda (x=10, y=550 px aproximadamente).
-- **Tamaño:** 320×160 px.
-- **Color:** azul oscuro semitransparente.
-- **Contenido:** cola de hasta 5 mensajes de texto apilados verticalmente.
-  - Los más recientes aparecen **abajo** (como una consola de terminal).
-  - Cada mensaje dura **4 segundos** por defecto y se desvanece en el último segundo.
-  - Si llegan más de 5 mensajes seguidos, el más antiguo se descarta.
+- **Posición:** esquina inferior izquierda (x=10, y≈550 px)
+- **Tamaño:** 500×160 px — azul oscuro semitransparente
+- **Fuente:** `PressStart2P-Regular.ttf` a 8 px (ya incluida en `assets/fonts/`)
+- **Capacidad:** hasta 8 líneas visibles; los mensajes largos hacen **salto de línea automático**
+- Los mensajes aparecen **desde arriba** (el primero en la línea superior)
+- Cada mensaje dura **4 segundos** por defecto y se desvanece en el último segundo
+- Cola interna de 5 mensajes; si llegan más, el más antiguo se descarta
 
 **Mensajes automáticos del juego:**
 
-| Situación | Mensaje |
-|---|---|
-| Jugador entra al juego | *"Bienvenido al dungeon. Encuentra las llaves y explora."* |
-| Jugador recoge una llave | *"Llave recogida"* |
-| Jugador abre una puerta | *"Puerta abierta"* |
-| Jugador intenta abrir sin llave | *"Necesitas una llave para abrir esta puerta"* |
+| Situación | Mensaje | Duración |
+|---|---|---|
+| Jugador entra al juego | *"Bienvenido al dungeon. Encuentra las llaves."* | 10 s |
+| Jugador recoge una llave | *"Llave recogida"* | 4 s |
+| Jugador abre una puerta | *"Puerta abierta"* | 4 s |
+| Jugador intenta abrir sin llave | *"Necesitas una llave para abrir esta puerta"* | 4 s |
+
+**Para cambiar el mensaje de bienvenida:** `DungeonJuego/Hud.cpp` → última línea de `inicia()`:
+```cpp
+agregarMensaje("Bienvenido al dungeon. Encuentra las llaves.", 10.0f);
+//              ↑ texto                                        ↑ segundos
+```
 
 ---
 
@@ -514,27 +531,21 @@ El HUD es una capa de interfaz fija que se dibuja **siempre en las mismas posici
 
 Depositar los PNGs en `DungeonJuego/assets/textures/ui/`:
 
-| Archivo | Tamaño | Para qué |
-|---|---|---|
-| `llave_icon.png` | 16×16 px o 24×24 px | Icono junto al contador de llaves |
-| `corazon.png` | 16×16 px o 24×24 px | Icono de vida (para cuando se implemente) |
-| `retrato_heroe.png` | 32×32 px o 48×48 px | Retrato del personaje en el panel de stats |
+| Archivo | Tamaño **exacto** | Para qué | Placeholder actual |
+|---|---|---|---|
+| `retrato_heroe.png` | **48×48 px** | Retrato del personaje en el panel de stats | Rectángulo morado (80,80,120) |
+| `llave_icon.png` | **24×24 px** | Icono junto al contador de llaves | Rectángulo amarillo (200,180,0) |
+| `corazon.png` | 16×16 px | Icono de vida (sesión futura) | Sin implementar aún |
 
-El programador los integrará buscando el marcador `TODO_HUD_STATS` en `DungeonJuego/Hud.cpp`.
+> Los PNGs se cargan automáticamente al arrancar el juego. Si el nombre o la ruta es incorrecta, el placeholder de color sigue apareciendo y el juego no crashea.
 
 ---
 
-### Para artistas — fuente del texto de la consola
+### Para artistas — fuente
 
-El texto de la consola usa una fuente TrueType. Depositar en `DungeonJuego/assets/fonts/`:
+La fuente `PressStart2P-Regular.ttf` **ya está incluida** en `DungeonJuego/assets/fonts/`. No hay que hacer nada.
 
-| Archivo | Formato | Notas |
-|---|---|---|
-| `DejaVuSans.ttf` | TrueType | Ya existe en `UNIR-2D/fuentes/` — solo hay que copiarla |
-
-El programador moverá el archivo a `DungeonJuego/fuentes/DejaVuSans.ttf` (donde lo busca el motor).
-
-Si no se coloca ninguna fuente, los paneles aparecen igualmente pero sin texto (sin error ni crash).
+Si se quiere usar otra fuente, nombrarla `fuente.ttf` y depositarla en esa misma carpeta. El juego intenta cargar `fuente.ttf` primero y usa `PressStart2P-Regular.ttf` como fallback.
 
 ---
 
@@ -546,9 +557,10 @@ Para que cualquier actor del juego pueda enviar mensajes a la consola del HUD:
    ```cpp
    class Hud;
    // ...
-   void ponHud(Hud* h) { hud = h; }
    private:
    Hud* hud = nullptr;
+   public:
+   void ponHud(Hud* h) { hud = h; }
    ```
 
 2. **En el `.cpp` del actor:** incluir `"Hud.h"` y llamar cuando ocurra el evento:
@@ -556,8 +568,7 @@ Para que cualquier actor del juego pueda enviar mensajes a la consola del HUD:
    #include "Hud.h"
    // ...
    if (hud) hud->agregarMensaje("texto del evento");
-   // Duración personalizada (por defecto 4 s):
-   if (hud) hud->agregarMensaje("texto importante", 6.0f);
+   if (hud) hud->agregarMensaje("texto importante", 6.0f);  // duración custom
    ```
 
 3. **En `JuegoDungeon::inicia()`**, después de crear el actor:
@@ -565,4 +576,4 @@ Para que cualquier actor del juego pueda enviar mensajes a la consola del HUD:
    miActor->ponHud(hud);
    ```
 
-El puntero `hud` puede ser `nullptr` — el código del actor no falla si no se ha conectado el HUD.
+El puntero `hud` puede ser `nullptr` — el actor no falla si el HUD no está conectado.
